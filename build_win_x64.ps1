@@ -88,7 +88,7 @@ try {
 	Write-Host '::endgroup::'
 
 	# 4) 查找目标 DLL 并打包
-	$dllNames = @('dxcompiler.dll','dxil.dll','dxilconv.dll')
+	$dllNames = @('dxcompiler.dll','dxil.dll','dxilconv.dll','dxcompiler.lib','dxil.lib','dxilconv.lib')
 	$found = @{}
 
 	Write-Host '::group::Locate DLLs'
