@@ -20,10 +20,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve latest DXC release tag
+        id: dxc_tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getLatestRelease({ owner: 'microsoft', repo: 'DirectXShaderCompiler' });
+            core.setOutput('tag', data.tag_name);
+
       - name: Checkout DXC (upstream)
         uses: actions/checkout@v4
         with:
           repository: microsoft/DirectXShaderCompiler
+          ref: ${{ steps.dxc_tag.outputs.tag }}
           fetch-depth: 0
           submodules: true
           path: dxc
