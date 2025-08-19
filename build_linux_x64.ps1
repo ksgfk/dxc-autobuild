@@ -31,7 +31,10 @@ param(
      -DCMAKE_BUILD_TYPE=Release -DENABLE_SPIRV_CODEGEN=ON -DHLSL_INCLUDE_TESTS=OFF \
      -DSPIRV_BUILD_TESTS=OFF -DCLANG_BUILD_EXAMPLES=OFF
 2) 构建： cmake --build <构建目录> --config Release --parallel <jobs>
-3) 查找并打包：libdxcompiler.so、libdxil.so
+3) 查找并打包：
+	- lib: libdxcompiler.so、libdxil.so
+	- include: 从 $ProjectDir/include/dxc/ 复制 dxcapi.h、dxcerrors.h、dxcisense.h、WinAdapter.h
+	（不创建 bin 目录）
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -73,12 +76,10 @@ try {
 		}
 	}
 
-	New-DirectoryIfNeeded -Path $BuildDir
-
 	# 如果构建目录已存在，先清空
-	if (Test-Path -LiteralPath $BuildDir) {
-		Write-Host "Clean existing build directory: $BuildDir"
-		Remove-Item -LiteralPath $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
+	if (Test-Path -LiteralPath $ArtifactsDir) {
+		Write-Host "Clean existing artifacts directory: $ArtifactsDir"
+		Remove-Item -LiteralPath $ArtifactsDir -Recurse -Force -ErrorAction SilentlyContinue
 	}
 	New-DirectoryIfNeeded -Path $BuildDir
 	New-DirectoryIfNeeded -Path $ArtifactsDir
@@ -115,7 +116,7 @@ try {
 	}
 	Write-Host '::endgroup::'
 
-	# 4) 查找目标 so 并打包
+	# 4) 查找目标 so 并按手动 install 布局打包
 	$soNames = @('libdxcompiler.so','libdxil.so')
 	$found = @{}
 
@@ -139,13 +140,30 @@ try {
 	}
 	Write-Host '::endgroup::'
 
-	# 拷贝到打包目录并压缩（与 Windows 一致：包含 dxc-<Config> 顶层文件夹）
+	# 创建打包目录结构（无 bin，仅 lib 与 include）
 	$packageDir = Join-Path $ArtifactsDir "dxc-$Config"
+	$libDir = Join-Path $packageDir 'lib'
+	$incDir = Join-Path $packageDir 'include'
 	New-DirectoryIfNeeded -Path $packageDir
+	New-DirectoryIfNeeded -Path $libDir
+	New-DirectoryIfNeeded -Path $incDir
 
-	foreach ($kv in $found.GetEnumerator()) {
-		$dst = Join-Path $packageDir $kv.Key
-		Copy-Item -LiteralPath $kv.Value -Destination $dst -Force
+	# 复制 .so 到 lib
+	foreach ($name in $soNames) {
+		$src = $found[$name]
+		if (-not $src) { throw "未定位到 $name" }
+		Copy-Item -LiteralPath $src -Destination (Join-Path $libDir $name) -Force
+	}
+
+	# 复制头文件到 include
+	$headerSrcDir = Join-Path $ProjectDir 'include/dxc'
+	$headers = @('dxcapi.h','dxcerrors.h','dxcisense.h','WinAdapter.h')
+	foreach ($h in $headers) {
+		$hSrc = Join-Path $headerSrcDir $h
+		if (-not (Test-Path -LiteralPath $hSrc)) {
+			throw "未找到头文件: $hSrc"
+		}
+		Copy-Item -LiteralPath $hSrc -Destination (Join-Path $incDir $h) -Force
 	}
 
 	# 使用 tar 创建 .tar.gz 压缩包（Linux 原生格式）

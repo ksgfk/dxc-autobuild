@@ -31,7 +31,10 @@ param(
 	 -DCMAKE_BUILD_TYPE=Release -DENABLE_SPIRV_CODEGEN=ON -DHLSL_INCLUDE_TESTS=OFF \
 	 -DSPIRV_BUILD_TESTS=ON -DCLANG_CL=ON -DCLANG_BUILD_EXAMPLES=OFF -T ClangCL
 2) 构建： cmake --build <构建目录> --config Release
-3) 查找并打包：dxcompiler.dll、dxil.dll、dxilconv.dll
+3) 查找并打包：
+	- bin: dxcompiler.dll、dxil.dll
+	- lib: dxcompiler.lib、dxil.lib
+	- include: 从 $ProjectDir/include/dxc/ 复制 dxcapi.h、dxcerrors.h、dxcisense.h
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -59,6 +62,15 @@ try {
 	New-DirectoryIfNeeded -Path $BuildDir
 	New-DirectoryIfNeeded -Path $ArtifactsDir
 
+	# 完全删除 artifacts 目录并重新创建
+	Write-Host '::group::Reset artifacts directory'
+	if (Test-Path -LiteralPath $ArtifactsDir) {
+		Remove-Item -LiteralPath $ArtifactsDir -Recurse -Force -ErrorAction SilentlyContinue
+	}
+	New-DirectoryIfNeeded -Path $ArtifactsDir
+	Write-Host "Artifacts reset: $ArtifactsDir"
+	Write-Host '::endgroup::'
+
 	Write-Host "Configure build directory: $BuildDir"
 	Write-Host "Artifacts directory: $ArtifactsDir"
 
@@ -71,7 +83,7 @@ try {
 		"-DCMAKE_BUILD_TYPE=$Config",
 		'-DENABLE_SPIRV_CODEGEN=ON',
 		'-DHLSL_INCLUDE_TESTS=OFF',
-		'-DSPIRV_BUILD_TESTS=ON',
+		'-DSPIRV_BUILD_TESTS=OFF',
 		'-DCLANG_CL=ON',
 		'-DCLANG_BUILD_EXAMPLES=OFF',
 		'-T', 'ClangCL'
@@ -87,12 +99,12 @@ try {
 	& cmake --build $BuildDir --config $Config -- /m
 	Write-Host '::endgroup::'
 
-	# 4) 查找目标 DLL 并打包
-	$dllNames = @('dxcompiler.dll','dxil.dll','dxilconv.dll','dxcompiler.lib','dxil.lib','dxilconv.lib')
+	# 4) 查找目标文件并打包
+	$targets = @('dxcompiler.dll','dxil.dll','dxcompiler.lib','dxil.lib')
 	$found = @{}
 
-	Write-Host '::group::Locate DLLs'
-	foreach ($name in $dllNames) {
+	Write-Host '::group::Locate build outputs'
+	foreach ($name in $targets) {
 		$candidates = Get-ChildItem -LiteralPath $BuildDir -Filter $name -File -Recurse -ErrorAction SilentlyContinue |
 			Sort-Object -Property FullName
 
@@ -111,15 +123,43 @@ try {
 	}
 	Write-Host '::endgroup::'
 
-	# 拷贝到打包目录并压缩
+	# 创建目标打包目录结构
 	$packageDir = Join-Path $ArtifactsDir "dxc-$Config"
-	New-DirectoryIfNeeded -Path $packageDir
+	$binDir = Join-Path $packageDir 'bin'
+	$libDir = Join-Path $packageDir 'lib'
+	$incDir = Join-Path $packageDir 'include'
 
-	foreach ($kv in $found.GetEnumerator()) {
-		$dst = Join-Path $packageDir $kv.Key
-		Copy-Item -LiteralPath $kv.Value -Destination $dst -Force
+	New-DirectoryIfNeeded -Path $packageDir
+	New-DirectoryIfNeeded -Path $binDir
+	New-DirectoryIfNeeded -Path $libDir
+	New-DirectoryIfNeeded -Path $incDir
+
+	# 复制 DLL 到 bin
+	foreach ($dll in @('dxcompiler.dll','dxil.dll')) {
+		$src = $found[$dll]
+		if (-not $src) { throw "未定位到 $dll" }
+		Copy-Item -LiteralPath $src -Destination (Join-Path $binDir $dll) -Force
 	}
 
+	# 复制 LIB 到 lib
+	foreach ($lib in @('dxcompiler.lib','dxil.lib')) {
+		$src = $found[$lib]
+		if (-not $src) { throw "未定位到 $lib" }
+		Copy-Item -LiteralPath $src -Destination (Join-Path $libDir $lib) -Force
+	}
+
+	# 复制头文件到 include
+	$headerSrcDir = Join-Path $ProjectDir 'include\dxc'
+	$headers = @('dxcapi.h','dxcerrors.h','dxcisense.h')
+	foreach ($h in $headers) {
+		$hSrc = Join-Path $headerSrcDir $h
+		if (-not (Test-Path -LiteralPath $hSrc)) {
+			throw "未找到头文件: $hSrc"
+		}
+		Copy-Item -LiteralPath $hSrc -Destination (Join-Path $incDir $h) -Force
+	}
+
+	# 压缩打包
 	$zipPath = Join-Path $ArtifactsDir $ZipName
 	if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
 	Compress-Archive -Path (Join-Path $packageDir '*') -DestinationPath $zipPath -Force

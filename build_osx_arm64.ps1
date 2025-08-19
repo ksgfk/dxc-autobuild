@@ -32,7 +32,10 @@ param(
 	 -DSPIRV_BUILD_TESTS=ON -DCLANG_BUILD_EXAMPLES=OFF \
 	 -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_SYSTEM_NAME=Darwin
 2) 构建： cmake --build <构建目录> --config Release --parallel <jobs>
-3) 查找并打包：libdxcompiler.dylib、libdxil.dylib、libdxilconv.dylib
+3) 查找并打包：
+	- lib: libdxcompiler.dylib、libdxil.dylib
+	- include: 从 $ProjectDir/include/dxc/ 复制 dxcapi.h、dxcerrors.h、dxcisense.h、WinAdapter.h
+	（不创建 bin 目录）
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -71,12 +74,10 @@ try {
 		}
 	}
 
-	New-DirectoryIfNeeded -Path $BuildDir
-
 	# 如果构建目录已存在，先清空
-	if (Test-Path -LiteralPath $BuildDir) {
-		Write-Host "Clean existing build directory: $BuildDir"
-		Remove-Item -LiteralPath $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
+	if (Test-Path -LiteralPath $ArtifactsDir) {
+		Write-Host "Clean existing artifacts directory: $ArtifactsDir"
+		Remove-Item -LiteralPath $ArtifactsDir -Recurse -Force -ErrorAction SilentlyContinue
 	}
 	New-DirectoryIfNeeded -Path $BuildDir
 	New-DirectoryIfNeeded -Path $ArtifactsDir
@@ -113,12 +114,12 @@ try {
 	}
 	Write-Host '::endgroup::'
 
-	# 4) 查找目标 dylib 并打包
-	$dylibNames = @('libdxcompiler.dylib','libdxil.dylib')
+	# 4) 查找目标文件并按手动 install 布局打包
+	$targets = @('libdxcompiler.dylib','libdxil.dylib')
 	$found = @{}
 
-	Write-Host '::group::Locate dylibs'
-	foreach ($name in $dylibNames) {
+	Write-Host '::group::Locate build outputs'
+	foreach ($name in $targets) {
 		$candidates = Get-ChildItem -LiteralPath $BuildDir -Filter $name -File -Recurse -ErrorAction SilentlyContinue |
 			Sort-Object -Property FullName
 
@@ -137,13 +138,31 @@ try {
 	}
 	Write-Host '::endgroup::'
 
-	# 拷贝到打包目录并压缩（与 Windows 一致：包含 dxc-<Config> 顶层文件夹）
+	# 创建打包目录结构（无 bin，仅 lib 与 include）
 	$packageDir = Join-Path $ArtifactsDir "dxc-$Config"
-	New-DirectoryIfNeeded -Path $packageDir
+	$libDir = Join-Path $packageDir 'lib'
+	$incDir = Join-Path $packageDir 'include'
 
-	foreach ($kv in $found.GetEnumerator()) {
-		$dst = Join-Path $packageDir $kv.Key
-		Copy-Item -LiteralPath $kv.Value -Destination $dst -Force
+	New-DirectoryIfNeeded -Path $packageDir
+	New-DirectoryIfNeeded -Path $libDir
+	New-DirectoryIfNeeded -Path $incDir
+
+	# 复制 dylib 到 lib
+	foreach ($dyl in @('libdxcompiler.dylib','libdxil.dylib')) {
+		$src = $found[$dyl]
+		if (-not $src) { throw "未定位到 $dyl" }
+		Copy-Item -LiteralPath $src -Destination (Join-Path $libDir $dyl) -Force
+	}
+
+	# 复制头文件到 include
+	$headerSrcDir = Join-Path $ProjectDir 'include/dxc'
+	$headers = @('dxcapi.h','dxcerrors.h','dxcisense.h','WinAdapter.h')
+	foreach ($h in $headers) {
+		$hSrc = Join-Path $headerSrcDir $h
+		if (-not (Test-Path -LiteralPath $hSrc)) {
+			throw "未找到头文件: $hSrc"
+		}
+		Copy-Item -LiteralPath $hSrc -Destination (Join-Path $incDir $h) -Force
 	}
 
 	# 使用 tar 创建 .tar.gz 压缩包（macOS 原生格式）
