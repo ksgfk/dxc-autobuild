@@ -137,7 +137,7 @@ try {
 	}
 	Write-Host '::endgroup::'
 
-	# 拷贝到打包目录并压缩
+	# 拷贝到打包目录并压缩（与 Windows 一致：包含 dxc-<Config> 顶层文件夹）
 	$packageDir = Join-Path $ArtifactsDir "dxc-$Config"
 	New-DirectoryIfNeeded -Path $packageDir
 
@@ -152,11 +152,9 @@ try {
 		Remove-Item -LiteralPath $archivePath -Force 
 	}
 
-	# 切换到 artifacts 目录，使用相对路径创建 tar.gz
-	Push-Location $ArtifactsDir
+	Push-Location $packageDir
 	try {
-		$packageDirName = Split-Path $packageDir -Leaf
-		& tar -czf $ArchiveName $packageDirName
+		& tar -czf $archivePath *
 		if ($LASTEXITCODE -ne 0) {
 			throw "tar 打包失败，退出码: $LASTEXITCODE"
 		}
