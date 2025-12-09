@@ -25,20 +25,20 @@ param(
   pwsh -File .\build_win_x64.ps1 -Config Release -ArtifactsDir .\out -ZipName dxc.zip
 
 脚本步骤：
-1) 使用 CMake 以 ClangCL 配置 Release：
-   cmake . -B <临时构建目录> \
-	 -C cmake\caches\PredefinedParams.cmake \
-	 -DCMAKE_BUILD_TYPE=Release -DENABLE_SPIRV_CODEGEN=ON -DHLSL_INCLUDE_TESTS=OFF \
-	 -DSPIRV_BUILD_TESTS=ON -DCLANG_CL=ON -DCLANG_BUILD_EXAMPLES=OFF -T ClangCL
-2) 构建： cmake --build <构建目录> --config Release
-3) 查找并打包：
-	- bin: dxcompiler.dll、dxil.dll
-	- lib: dxcompiler.lib、dxil.lib
-	- include: 从 $ProjectDir/include/dxc/ 复制 dxcapi.h、dxcerrors.h、dxcisense.h
+1) CMake 配置：
+   cmake . -B <BuildDir> -C ... -DCMAKE_INSTALL_PREFIX=<InstallDir> ...
+2) 构建：
+   cmake --build <BuildDir> --config Release
+3) 安装：
+   cmake --build <BuildDir> --config Release --target install-distribution
+4) 手动复制补充文件：
+   - dxil.dll -> bin
+   - dxcompiler.lib, dxil.lib -> lib
+5) 打包
 #>
 
 $ErrorActionPreference = 'Stop'
-$PSStyle.OutputRendering = 'PlainText'  # 减少日志转义在 Actions 输出中的干扰
+$PSStyle.OutputRendering = 'PlainText'
 
 function New-DirectoryIfNeeded([string]$Path) {
 	if (![string]::IsNullOrWhiteSpace($Path)) {
@@ -62,7 +62,7 @@ try {
 	New-DirectoryIfNeeded -Path $BuildDir
 	New-DirectoryIfNeeded -Path $ArtifactsDir
 
-	# 完全删除 artifacts 目录并重新创建
+	# 重置 artifacts 目录
 	Write-Host '::group::Reset artifacts directory'
 	if (Test-Path -LiteralPath $ArtifactsDir) {
 		Remove-Item -LiteralPath $ArtifactsDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -71,21 +71,34 @@ try {
 	Write-Host "Artifacts reset: $ArtifactsDir"
 	Write-Host '::endgroup::'
 
-	Write-Host "Configure build directory: $BuildDir"
-	Write-Host "Artifacts directory: $ArtifactsDir"
+    # 定义安装目录 (作为 CMAKE_INSTALL_PREFIX)
+    $InstallDir = Join-Path $ArtifactsDir "dxc-$Config"
+    New-DirectoryIfNeeded -Path $InstallDir
 
-	# 2) CMake 配置（ClangCL, Release + 题述参数）
+	Write-Host "Configure build directory: $BuildDir"
+	Write-Host "Install directory: $InstallDir"
+
+	# 2) CMake 配置
+    # 用户提供的样例：
+    # cmake . -B "..." -C cmake\caches\PredefinedParams.cmake 
+    # -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="..." 
+    # -DENABLE_SPIRV_CODEGEN=ON -DLIBCLANG_BUILD_STATIC=OFF 
+    # -DHLSL_INCLUDE_TESTS=OFF -DSPIRV_BUILD_TESTS=OFF -DLLVM_INCLUDE_TESTS=OFF 
+    # -DCLANG_CL=ON -T ClangCL
+
 	$cmakeArgs = @(
 		$ProjectDir,
 		'-B', $BuildDir,
 		'-C', "$ProjectDir\cmake\caches\PredefinedParams.cmake",
-	    '-A', 'x64',
+	    '-A', 'x64', # 保持 x64 架构指定
 		"-DCMAKE_BUILD_TYPE=$Config",
+        "-DCMAKE_INSTALL_PREFIX=$InstallDir",
 		'-DENABLE_SPIRV_CODEGEN=ON',
+        '-DLIBCLANG_BUILD_STATIC=OFF',
 		'-DHLSL_INCLUDE_TESTS=OFF',
 		'-DSPIRV_BUILD_TESTS=OFF',
+        '-DLLVM_INCLUDE_TESTS=OFF',
 		'-DCLANG_CL=ON',
-		'-DCLANG_BUILD_EXAMPLES=OFF',
 		'-T', 'ClangCL'
 	)
 
@@ -94,79 +107,83 @@ try {
 	& cmake @cmakeArgs
 	Write-Host '::endgroup::'
 
-	# 3) 构建（使用 VS 生成器时并行开关为 /m）
+	# 3) 构建
 	Write-Host '::group::CMake Build'
-	& cmake --build $BuildDir --config $Config -- /m
+    # cmake --build "..." --config Release
+    $buildArgs = @(
+        '--build', $BuildDir,
+        '--config', $Config,
+        '--', '/m'
+    )
+    Write-Host ("cmake " + ($buildArgs -join ' '))
+	& cmake @buildArgs
 	Write-Host '::endgroup::'
 
-	# 4) 查找目标文件并打包
-	$targets = @('dxcompiler.dll','dxil.dll','dxcompiler.lib','dxil.lib')
-	$found = @{}
+    # 4) 安装 (install-distribution)
+    Write-Host '::group::CMake Install'
+    # cmake --build "..." --config Release --target install-distribution
+    $installArgs = @(
+        '--build', $BuildDir,
+        '--config', $Config,
+        '--target', 'install-distribution'
+    )
+    Write-Host ("cmake " + ($installArgs -join ' '))
+    & cmake @installArgs
+    Write-Host '::endgroup::'
 
-	Write-Host '::group::Locate build outputs'
-	foreach ($name in $targets) {
-		$candidates = Get-ChildItem -LiteralPath $BuildDir -Filter $name -File -Recurse -ErrorAction SilentlyContinue |
+	# 5) 手动复制补充文件
+    # 需求：
+    # 复制 dxil.dll 到 bin 文件夹
+    # 复制 dxcompiler.lib、dxil.lib 到 lib 文件夹
+    
+	Write-Host '::group::Post-Install Copy'
+    
+    # 辅助函数：在 BuildDir 中查找文件
+    function Find-BuildArtifact([string]$Name) {
+        $candidates = Get-ChildItem -LiteralPath $BuildDir -Filter $Name -File -Recurse -ErrorAction SilentlyContinue |
 			Sort-Object -Property FullName
-
-		if (-not $candidates -or $candidates.Count -eq 0) {
-			throw "未找到 $name（在 $BuildDir 下）"
+        
+        if (-not $candidates -or $candidates.Count -eq 0) {
+			throw "未找到 $Name（在 $BuildDir 下）"
 		}
 
-		# 优先选择路径中包含配置名(如 Release)的候选；否则取最近写入的一个
+        # 优先选择路径中包含配置名(如 Release)的候选；否则取最近写入的一个
 		$preferred = $candidates | Where-Object { $_.FullName -match [Regex]::Escape($Config) } | Select-Object -First 1
 		if (-not $preferred) {
 			$preferred = $candidates | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
 		}
+        return $preferred.FullName
+    }
 
-		$found[$name] = $preferred.FullName
-		Write-Host ("Found {0}: {1}" -f $name, $preferred.FullName)
-	}
+    $binDir = Join-Path $InstallDir 'bin'
+    $libDir = Join-Path $InstallDir 'lib'
+    New-DirectoryIfNeeded -Path $binDir
+    New-DirectoryIfNeeded -Path $libDir
+
+    # 复制 dxil.dll -> bin
+    $dxilDll = Find-BuildArtifact 'dxil.dll'
+    Write-Host "Copying $dxilDll to $binDir"
+    Copy-Item -LiteralPath $dxilDll -Destination (Join-Path $binDir 'dxil.dll') -Force
+
+    # 复制 libs -> lib
+    foreach ($libName in @('dxcompiler.lib', 'dxil.lib')) {
+        $libPath = Find-BuildArtifact $libName
+        Write-Host "Copying $libPath to $libDir"
+        Copy-Item -LiteralPath $libPath -Destination (Join-Path $libDir $libName) -Force
+    }
+
 	Write-Host '::endgroup::'
 
-	# 创建目标打包目录结构
-	$packageDir = Join-Path $ArtifactsDir "dxc-$Config"
-	$binDir = Join-Path $packageDir 'bin'
-	$libDir = Join-Path $packageDir 'lib'
-	$incDir = Join-Path $packageDir 'include'
-
-	New-DirectoryIfNeeded -Path $packageDir
-	New-DirectoryIfNeeded -Path $binDir
-	New-DirectoryIfNeeded -Path $libDir
-	New-DirectoryIfNeeded -Path $incDir
-
-	# 复制 DLL 到 bin
-	foreach ($dll in @('dxcompiler.dll','dxil.dll')) {
-		$src = $found[$dll]
-		if (-not $src) { throw "未定位到 $dll" }
-		Copy-Item -LiteralPath $src -Destination (Join-Path $binDir $dll) -Force
-	}
-
-	# 复制 LIB 到 lib
-	foreach ($lib in @('dxcompiler.lib','dxil.lib')) {
-		$src = $found[$lib]
-		if (-not $src) { throw "未定位到 $lib" }
-		Copy-Item -LiteralPath $src -Destination (Join-Path $libDir $lib) -Force
-	}
-
-	# 复制头文件到 include
-	$headerSrcDir = Join-Path $ProjectDir 'include\dxc'
-	$headers = @('dxcapi.h','dxcerrors.h','dxcisense.h')
-	foreach ($h in $headers) {
-		$hSrc = Join-Path $headerSrcDir $h
-		if (-not (Test-Path -LiteralPath $hSrc)) {
-			throw "未找到头文件: $hSrc"
-		}
-		Copy-Item -LiteralPath $hSrc -Destination (Join-Path $incDir $h) -Force
-	}
-
-	# 压缩打包
+	# 6) 压缩打包
 	$zipPath = Join-Path $ArtifactsDir $ZipName
 	if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
-	Compress-Archive -Path (Join-Path $packageDir '*') -DestinationPath $zipPath -Force
+    
+    Write-Host "Archiving $InstallDir to $zipPath"
+	Compress-Archive -Path (Join-Path $InstallDir '*') -DestinationPath $zipPath -Force
 
 	Write-Host "打包完成: $zipPath"
 
-	# 在 GitHub Actions 中输出 artifact 路径，便于后续 steps 上传
+	# 在 GitHub Actions 中输出 artifact 路径
 	if ($env:GITHUB_OUTPUT) {
 		"artifact=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 	}
