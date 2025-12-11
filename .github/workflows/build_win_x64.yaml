@@ -47,5 +47,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dxc-windows-x64
-          path: artifacts/*.zip
+          path: artifacts/dxc-Release
           retention-days: 1
