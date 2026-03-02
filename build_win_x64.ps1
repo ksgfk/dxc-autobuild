@@ -99,7 +99,7 @@ try {
 		'-DSPIRV_BUILD_TESTS=OFF',
         '-DLLVM_INCLUDE_TESTS=OFF',
 		'-DCLANG_CL=ON',
-		'-T', 'ClangCL'
+		# '-T', 'ClangCL'
 	)
 
 	Write-Host '::group::CMake Configure'
