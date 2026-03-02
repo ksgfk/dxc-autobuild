@@ -97,7 +97,7 @@ try {
         '-DLIBCLANG_BUILD_STATIC=OFF',
 		'-DHLSL_INCLUDE_TESTS=OFF',
 		'-DSPIRV_BUILD_TESTS=OFF',
-        '-DLLVM_INCLUDE_TESTS=OFF',
+        '-DLLVM_INCLUDE_TESTS=OFF'
 		# '-DCLANG_CL=ON',
 		# '-T', 'ClangCL'
 	)
