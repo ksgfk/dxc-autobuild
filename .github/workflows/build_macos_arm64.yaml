@@ -7,6 +7,11 @@ on:
         description: "DXC ref (branch/tag)"
         required: true
         default: "main"
+        type: string
+      release_tag:
+        description: "GitHub Release tag (e.g. v1.0.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -37,11 +42,41 @@ jobs:
 
       - name: Show artifact path
         if: always()
+        env:
+          ARTIFACT_PATH: ${{ steps.build.outputs.artifact }}
         run: |
-          echo "Artifact from build step: ${{ steps.build.outputs.artifact }}"
+          echo "Artifact from build step: ${ARTIFACT_PATH}"
+
+      - name: Validate release asset path
+        if: success()
+        id: release_asset
+        env:
+          ARTIFACT_PATH: ${{ steps.build.outputs.artifact }}
+        run: |
+          artifact="${ARTIFACT_PATH}"
+          if [[ -z "${artifact}" ]]; then
+            echo "Build output 'artifact' is empty." >&2
+            exit 1
+          fi
+          if [[ ! -f "${artifact}" ]]; then
+            echo "Release asset not found: ${artifact}" >&2
+            exit 1
+          fi
+
+          normalized="${artifact//\\//}"
+          echo "asset_path=${normalized}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: ${{ steps.release_asset.outputs.asset_path }}
+          overwrite_files: true
+          generate_release_notes: true
 
       - name: Upload artifact (backup)
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: dxc-macos-arm64

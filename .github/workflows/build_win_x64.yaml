@@ -7,6 +7,11 @@ on:
         description: "DXC ref (branch/tag)"
         required: true
         default: "main"
+        type: string
+      release_tag:
+        description: "GitHub Release tag (e.g. v1.0.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -34,16 +39,45 @@ jobs:
         id: build
         shell: pwsh
         run: |
-          pwsh -File .\build_win_x64.ps1 -ProjectDir "$env:GITHUB_WORKSPACE\dxc" -Config Release
+          .\build_win_x64.ps1 -ProjectDir "$env:GITHUB_WORKSPACE\dxc" -Config Release
 
       - name: Show artifact path
         if: always()
         shell: pwsh
+        env:
+          ARTIFACT_PATH: ${{ steps.build.outputs.artifact }}
         run: |
-          Write-Host "Artifact from build step: ${{ steps.build.outputs.artifact }}"
+          Write-Host "Artifact from build step: $env:ARTIFACT_PATH"
+
+      - name: Validate release asset path
+        if: success()
+        id: release_asset
+        shell: pwsh
+        env:
+          ARTIFACT_PATH: ${{ steps.build.outputs.artifact }}
+        run: |
+          $artifact = $env:ARTIFACT_PATH
+          if ([string]::IsNullOrWhiteSpace($artifact)) {
+            throw "Build output 'artifact' is empty."
+          }
+          if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+            throw "Release asset not found: $artifact"
+          }
+
+          $normalized = $artifact -replace '\\', '/'
+          "asset_path=$normalized" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Publish GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: ${{ steps.release_asset.outputs.asset_path }}
+          overwrite_files: true
+          generate_release_notes: true
 
       - name: Upload artifact (backup)
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: dxc-windows-x64
