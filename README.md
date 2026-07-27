@@ -12,7 +12,7 @@ DXC 自动构建与发布（GitHub Actions）。
 在 GitHub 仓库页面进入 **Actions**，选择对应 workflow，点击 **Run workflow**，填写：
 
 - `dxc_ref`：上游 DXC 的分支或 tag（默认 `main`）
-- `release_tag`：要发布到 GitHub Release 的 tag（例如 `v1.0.0`）
+- `release_tag`：要发布到 GitHub Release 的 tag（例如 `v1.9.0`）
 
 ## 产物与发布行为
 
