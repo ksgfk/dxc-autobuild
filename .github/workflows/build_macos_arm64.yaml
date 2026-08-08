@@ -9,7 +9,7 @@ on:
         default: "codex/radray-dxc-1.9.2607"
         type: string
       release_tag:
-        description: "GitHub Release tag (e.g. v1.9.2607+radray.1)"
+        description: "GitHub Release tag (e.g. v1.9.2607.radray.1)"
         required: true
         type: string
 

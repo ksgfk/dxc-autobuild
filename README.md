@@ -12,9 +12,9 @@ DXC 自动构建与发布（GitHub Actions）。
 在 GitHub 仓库页面进入 **Actions**，选择对应 workflow，点击 **Run workflow**，填写：
 
 - `dxc_ref`：`ksgfk/DirectXShaderCompiler` fork 的分支或 tag（默认 `codex/radray-dxc-1.9.2607`）
-- `release_tag`：要发布到 GitHub Release 的 tag（例如 `v1.9.2607+radray.1`）
+- `release_tag`：要发布到 GitHub Release 的 tag（例如 `v1.9.2607.radray.1`）
 
-RadRay fork 的包身份是 `1.9.2607+radray.1`，对应的 GitHub Release tag 使用 `v1.9.2607+radray.1`。正式 RadRay SDK 包使用 `radray-dxc-1.9.2607+radray.1-windows-x64.zip` 这样的文件名。
+RadRay fork 的包身份是 `1.9.2607.radray.1`，对应的 GitHub Release tag 使用 `v1.9.2607.radray.1`。Release Asset 沿用平台通用文件名，例如 `dxc-windows-x64.zip`。
 
 ## 产物与发布行为
 
