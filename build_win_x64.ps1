@@ -14,8 +14,11 @@ param(
 	# 产物目录（默认：脚本目录下 artifacts）
 	[string]$ArtifactsDir = (Join-Path $PSScriptRoot 'artifacts'),
 
-	# 打包 zip 文件名
-	[string]$ZipName = 'dxc-windows-x64.zip'
+    # 打包 zip 文件名
+	[string]$ZipName = 'dxc-windows-x64.zip',
+
+	# 使用 Visual Studio 的 ClangCL toolset
+	[switch]$UseClangCl
 )
 
 <#
@@ -23,6 +26,7 @@ param(
   pwsh -File .\build_win_x64.ps1
 或自定义参数：
   pwsh -File .\build_win_x64.ps1 -Config Release -ArtifactsDir .\out -ZipName dxc.zip
+  pwsh -File .\build_win_x64.ps1 -ProjectDir .\dxc -UseClangCl
 
 脚本步骤：
 1) CMake 配置：
@@ -97,10 +101,18 @@ try {
         '-DLIBCLANG_BUILD_STATIC=OFF',
 		'-DHLSL_INCLUDE_TESTS=OFF',
 		'-DSPIRV_BUILD_TESTS=OFF',
-        '-DLLVM_INCLUDE_TESTS=OFF'
-		# '-DCLANG_CL=ON',
-		# '-T', 'ClangCL'
+		'-DLLVM_INCLUDE_TESTS=OFF'
 	)
+	if ($UseClangCl) {
+		$cmakeArgs += @(
+			'-T', 'ClangCL',
+			'-DHLSL_ENABLE_FIXED_VER=ON',
+			'-DSPIRV_WERROR=OFF',
+			'-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF',
+			'-DCMAKE_CXX_FLAGS=-Wno-error=missing-field-initializers',
+			'-DCMAKE_C_FLAGS=-Wno-error=missing-field-initializers'
+		)
+	}
 
 	Write-Host '::group::CMake Configure'
 	Write-Host ("cmake " + ($cmakeArgs -join ' '))
