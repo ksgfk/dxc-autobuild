@@ -6,10 +6,10 @@ on:
       dxc_ref:
         description: "DXC ref (branch/tag)"
         required: true
-        default: "main"
+        default: "codex/radray-dxc-1.9.2607"
         type: string
       release_tag:
-        description: "GitHub Release tag (e.g. v1.0.0)"
+        description: "GitHub Release tag (e.g. v1.9.2607+radray.1)"
         required: true
         type: string
 
@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ksgfk/DirectXShaderCompiler
-          ref: ${{ inputs.dxc_ref || 'main' }}
+          ref: ${{ inputs.dxc_ref || 'codex/radray-dxc-1.9.2607' }}
           fetch-depth: 0
           submodules: true
           path: dxc

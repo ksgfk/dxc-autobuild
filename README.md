@@ -11,10 +11,10 @@ DXC 自动构建与发布（GitHub Actions）。
 
 在 GitHub 仓库页面进入 **Actions**，选择对应 workflow，点击 **Run workflow**，填写：
 
-- `dxc_ref`：`ksgfk/DirectXShaderCompiler` fork 的分支或 tag（默认 `main`）
-- `release_tag`：要发布到 GitHub Release 的 tag（例如 `v1.9.2607`）
+- `dxc_ref`：`ksgfk/DirectXShaderCompiler` fork 的分支或 tag（默认 `codex/radray-dxc-1.9.2607`）
+- `release_tag`：要发布到 GitHub Release 的 tag（例如 `v1.9.2607+radray.1`）
 
-当前 fork `main` 的嵌入版本来自 `utils/version/version.inc`，为 `1.9.2607.0`，发布 tag 使用 `v1.9.2607`。
+RadRay fork 的包身份是 `1.9.2607+radray.1`，对应的 GitHub Release tag 使用 `v1.9.2607+radray.1`。正式 RadRay SDK 包使用 `radray-dxc-1.9.2607+radray.1-windows-x64.zip` 这样的文件名。
 
 ## 产物与发布行为
 
@@ -25,11 +25,13 @@ DXC 自动构建与发布（GitHub Actions）。
 
 ## 本地 Windows 构建
 
-使用 Visual Studio 的 ClangCL toolset 构建并打包：
+使用 Visual Studio 的 ClangCL toolset 构建：
 
 ```powershell
 pwsh -File .\build_win_x64.ps1 -ProjectDir F:\path\to\DirectXShaderCompiler -UseClangCl
 ```
+
+RadRay SDK 包由 fork 自带的 `utils/package_radray_sdk.py` 生成，使用构建目录执行 `--no-build` 可复用已完成的构建。
 
 ## 下载
 
