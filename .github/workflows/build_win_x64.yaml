@@ -8,6 +8,11 @@ on:
         required: true
         default: "codex/radray-dxc-1.9.2607"
         type: string
+      package_version:
+        description: "Package version used in the uploaded file name"
+        required: true
+        default: "1.9.2607.radray.1"
+        type: string
 
 permissions:
   contents: write
@@ -34,8 +39,14 @@ jobs:
       - name: Build
         id: build
         shell: pwsh
+        env:
+          PACKAGE_VERSION: ${{ inputs.package_version }}
         run: |
-          .\build_win_x64.ps1 -ProjectDir "$env:GITHUB_WORKSPACE\dxc" -Config Release -UseClangCl
+          if ($env:PACKAGE_VERSION -notmatch '^[0-9A-Za-z][0-9A-Za-z._+-]*$') {
+            throw "package_version may contain only letters, numbers, dots, underscores, plus signs, and hyphens."
+          }
+          $zipName = "dxc-windows-x64-$env:PACKAGE_VERSION.zip"
+          .\build_win_x64.ps1 -ProjectDir "$env:GITHUB_WORKSPACE\dxc" -Config Release -UseClangCl -ZipName $zipName
 
       - name: Show artifact path
         if: always()
@@ -52,6 +63,7 @@ jobs:
         env:
           ARTIFACT_PATH: ${{ steps.build.outputs.artifact }}
           DXC_REF: ${{ inputs.dxc_ref }}
+          PACKAGE_VERSION: ${{ inputs.package_version }}
         run: |
           $artifact = $env:ARTIFACT_PATH
           if ([string]::IsNullOrWhiteSpace($artifact)) {
@@ -64,12 +76,13 @@ jobs:
           $normalized = $artifact -replace '\\', '/'
           $manifest = [ordered]@{
             platform = 'windows-x64'
+            package_version = $env:PACKAGE_VERSION
             dxc_ref = $env:DXC_REF
             dxc_commit = (git -C "$env:GITHUB_WORKSPACE\dxc" rev-parse HEAD).Trim()
             built_at = (Get-Date).ToUniversalTime().ToString('o')
             asset = Split-Path -Leaf $artifact
           }
-          $manifestPath = Join-Path $env:GITHUB_WORKSPACE 'artifacts/dxc-windows-x64.manifest.json'
+          $manifestPath = Join-Path $env:GITHUB_WORKSPACE "artifacts/dxc-windows-x64-$env:PACKAGE_VERSION.manifest.json"
           $manifest | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding utf8
 
           "asset_path=$normalized" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append

@@ -8,6 +8,11 @@ on:
         required: true
         default: "codex/radray-dxc-1.9.2607"
         type: string
+      package_version:
+        description: "Package version used in the uploaded file name"
+        required: true
+        default: "1.9.2607.radray.1"
+        type: string
 
 permissions:
   contents: write
@@ -33,8 +38,15 @@ jobs:
 
       - name: Build
         id: build
+        env:
+          PACKAGE_VERSION: ${{ inputs.package_version }}
         run: |
-          bash ./build_macos_arm64.sh --project-dir "$GITHUB_WORKSPACE/dxc" --config Release
+          if [[ ! "${PACKAGE_VERSION}" =~ ^[0-9A-Za-z][0-9A-Za-z._+\-]*$ ]]; then
+            echo "package_version may contain only letters, numbers, dots, underscores, plus signs, and hyphens." >&2
+            exit 1
+          fi
+          zip_name="dxc-macos-arm64-${PACKAGE_VERSION}.zip"
+          bash ./build_macos_arm64.sh --project-dir "$GITHUB_WORKSPACE/dxc" --config Release --zip-name "${zip_name}"
 
       - name: Show artifact path
         if: always()
@@ -49,6 +61,7 @@ jobs:
         env:
           ARTIFACT_PATH: ${{ steps.build.outputs.artifact }}
           DXC_REF: ${{ inputs.dxc_ref }}
+          PACKAGE_VERSION: ${{ inputs.package_version }}
         run: |
           artifact="${ARTIFACT_PATH}"
           if [[ -z "${artifact}" ]]; then
@@ -61,15 +74,16 @@ jobs:
           fi
 
           normalized="${artifact//\\//}"
-          manifest_path="${GITHUB_WORKSPACE}/artifacts/dxc-macos-arm64.manifest.json"
+          manifest_path="${GITHUB_WORKSPACE}/artifacts/dxc-macos-arm64-${PACKAGE_VERSION}.manifest.json"
           dxc_commit="$(git -C "${GITHUB_WORKSPACE}/dxc" rev-parse HEAD)"
           jq -n \
             --arg platform 'macos-arm64' \
+            --arg package_version "${PACKAGE_VERSION}" \
             --arg dxc_ref "${DXC_REF}" \
             --arg dxc_commit "${dxc_commit}" \
             --arg built_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             --arg asset "$(basename "${artifact}")" \
-            '{platform: $platform, dxc_ref: $dxc_ref, dxc_commit: $dxc_commit, built_at: $built_at, asset: $asset}' \
+            '{platform: $platform, package_version: $package_version, dxc_ref: $dxc_ref, dxc_commit: $dxc_commit, built_at: $built_at, asset: $asset}' \
             > "${manifest_path}"
 
           echo "asset_path=${normalized}" >> "${GITHUB_OUTPUT}"
