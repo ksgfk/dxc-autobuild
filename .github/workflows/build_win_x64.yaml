@@ -35,7 +35,7 @@ jobs:
         id: build
         shell: pwsh
         run: |
-          .\build_win_x64.ps1 -ProjectDir "$env:GITHUB_WORKSPACE\dxc" -Config Release
+          .\build_win_x64.ps1 -ProjectDir "$env:GITHUB_WORKSPACE\dxc" -Config Release -UseClangCl
 
       - name: Show artifact path
         if: always()
