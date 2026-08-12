@@ -8,10 +8,6 @@ on:
         required: true
         default: "codex/radray-dxc-1.9.2607"
         type: string
-      release_tag:
-        description: "GitHub Release tag (e.g. v1.9.2607.radray.1)"
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -52,6 +48,7 @@ jobs:
         id: release_asset
         env:
           ARTIFACT_PATH: ${{ steps.build.outputs.artifact }}
+          DXC_REF: ${{ inputs.dxc_ref }}
         run: |
           artifact="${ARTIFACT_PATH}"
           if [[ -z "${artifact}" ]]; then
@@ -64,16 +61,34 @@ jobs:
           fi
 
           normalized="${artifact//\\//}"
-          echo "asset_path=${normalized}" >> "${GITHUB_OUTPUT}"
+          manifest_path="${GITHUB_WORKSPACE}/artifacts/dxc-macos-arm64.manifest.json"
+          dxc_commit="$(git -C "${GITHUB_WORKSPACE}/dxc" rev-parse HEAD)"
+          jq -n \
+            --arg platform 'macos-arm64' \
+            --arg dxc_ref "${DXC_REF}" \
+            --arg dxc_commit "${dxc_commit}" \
+            --arg built_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --arg asset "$(basename "${artifact}")" \
+            '{platform: $platform, dxc_ref: $dxc_ref, dxc_commit: $dxc_commit, built_at: $built_at, asset: $asset}' \
+            > "${manifest_path}"
 
-      - name: Publish GitHub Release
+          echo "asset_path=${normalized}" >> "${GITHUB_OUTPUT}"
+          echo "manifest_path=${manifest_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish rolling GitHub Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag }}
-          files: ${{ steps.release_asset.outputs.asset_path }}
+          tag_name: latest
+          name: DXC Autobuild (Latest)
+          body: |
+            Rolling DXC build artifacts. Each platform asset is replaced by its latest successful build.
+            See the adjacent platform manifest for the DXC ref, resolved commit, and build time.
+          files: |
+            ${{ steps.release_asset.outputs.asset_path }}
+            ${{ steps.release_asset.outputs.manifest_path }}
           overwrite_files: true
-          generate_release_notes: true
+          generate_release_notes: false
 
       - name: Upload artifact (backup)
         if: failure()
