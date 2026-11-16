@@ -11,12 +11,12 @@ DXC 自动构建与发布（GitHub Actions）。
 
 在 GitHub 仓库页面进入 **Actions**，选择对应 workflow，点击 **Run workflow**，填写：
 
-- `dxc_ref`：`ksgfk/DirectXShaderCompiler` fork 的提交、分支或 tag（默认 `5f3d596c12efb750e9c73341f1125b4cd8a5fbaf`）
-- `package_version`：写入包文件名的版本号（默认 `1.9.2609.radray.3`）。只允许字母、数字、`.`、`_`、`+` 和 `-`。
+- `dxc_ref`：`ksgfk/DirectXShaderCompiler` fork 的提交、分支或 tag（默认 `b7f344b3fd252ccfd9d237334df828d8f20de4b0`）
+- `package_version`：写入包文件名的版本号（默认 `1.9.2609.radray.4`）。只允许字母、数字、`.`、`_`、`+` 和 `-`。
 
 ## 产物与发布行为
 
-- 构建脚本会生成带版本的平台 zip 包，例如 `dxc-windows-x64-1.9.2609.radray.3.zip` 和 `dxc-macos-arm64-1.9.2609.radray.3.zip`。
+- 构建脚本会生成带版本的平台 zip 包，例如 `dxc-windows-x64-1.9.2609.radray.4.zip` 和 `dxc-macos-arm64-1.9.2609.radray.4.zip`。
 - 两个 workflow 都将资产上传到唯一的滚动 Release：`latest`（标题为 `DXC Autobuild (Latest)`）。发布前该 Release 必须存在；工作流不修改源码提交。
 - 同一版本、同一平台的 zip 和 manifest 不允许覆盖；构建前检查已有资产及源码版本，版本必须与 SDK 内部版本一致。不同版本保留在同一 Release 中。每个 zip 旁还会有同版本 manifest，记录版本、输入 ref、实际解析到的 DXC commit、构建时间与 SHA256。
 - 失败时会额外上传 Actions artifact 作为一天期的排障备份。
@@ -37,6 +37,6 @@ RadRay SDK 包由 fork 自带的 `utils/package_radray_sdk.py` 生成。两个�
 ## 下载
 
 - 对外分发请从 GitHub **Releases** 页面下载 `latest` 中所需版本的资产；文件名中包含版本，因此可直接作为稳定下载路径的一部分，例如：
-  - `https://github.com/ksgfk/dxc-autobuild/releases/download/latest/dxc-windows-x64-1.9.2609.radray.3.zip`
-  - `https://github.com/ksgfk/dxc-autobuild/releases/download/latest/dxc-macos-arm64-1.9.2609.radray.3.zip`
+  - `https://github.com/ksgfk/dxc-autobuild/releases/download/latest/dxc-windows-x64-1.9.2609.radray.4.zip`
+  - `https://github.com/ksgfk/dxc-autobuild/releases/download/latest/dxc-macos-arm64-1.9.2609.radray.4.zip`
 - Actions 中的 artifact 主要用于失败排障备份。

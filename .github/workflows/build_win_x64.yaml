@@ -6,12 +6,12 @@ on:
       dxc_ref:
         description: "DXC ref (commit/branch/tag)"
         required: true
-        default: "5f3d596c12efb750e9c73341f1125b4cd8a5fbaf"
+        default: "b7f344b3fd252ccfd9d237334df828d8f20de4b0"
         type: string
       package_version:
         description: "Package version used in the uploaded file name"
         required: true
-        default: "1.9.2609.radray.3"
+        default: "1.9.2609.radray.4"
         type: string
 
 permissions:
@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ksgfk/DirectXShaderCompiler
-          ref: ${{ inputs.dxc_ref || '5f3d596c12efb750e9c73341f1125b4cd8a5fbaf' }}
+          ref: ${{ inputs.dxc_ref || 'b7f344b3fd252ccfd9d237334df828d8f20de4b0' }}
           fetch-depth: 0
           submodules: true
           path: dxc
